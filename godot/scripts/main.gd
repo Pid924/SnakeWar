@@ -1141,9 +1141,7 @@ func _update_hud() -> void:
 		return
 	for p in 2:
 		var s = logic.snakes[p]
-		var pips := ""
-		for i in win_target:
-			pips += "● " if i < scores[p] else "○ "
+		var pips := "แต้ม %d/%d" % [scores[p], win_target]
 		var len_txt := "ยาว %d" % (s.body.size() + s.grow)
 		p_info[p].text = (pips + "  " + len_txt) if p == 0 else (len_txt + "  " + pips)
 		var left: float = s.slow_until - logic.game_time
