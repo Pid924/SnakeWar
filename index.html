@@ -111,15 +111,15 @@ canvas#game{display:block;border-radius:10px;box-shadow:0 0 0 2px var(--line),0 
   <header>
     <div class="brand">
       <h1><span class="a">สงคราม</span><span class="b">งู</span></h1>
-      <span class="tag">เกมงู 2 คน บนคีย์บอร์ดเดียวกัน ใครชนก่อนแพ้</span>
+      <span class="tag">ดวลงูกับคอม หรือเล่น 2 คนบนคีย์บอร์ดเดียวกัน ใครชนก่อนแพ้</span>
     </div>
-    <button class="ghost" id="muteBtn" aria-pressed="false">เสียง: เปิด</button>
+    <div style="display:flex;gap:8px;flex-wrap:wrap"><a class="ghost" href="3d/" style="text-decoration:none;color:var(--gold)">เล่นเวอร์ชัน 3D</a><button class="ghost" id="muteBtn" aria-pressed="false">เสียง: เปิด</button></div>
   </header>
 
   <div class="hud" id="hud" hidden>
     <div class="pl p1">
       <div class="nm">ผู้เล่น 1 <span class="chip" id="slow1" hidden>ช้าลง</span></div>
-      <div class="keys">ปุ่ม <kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd></div>
+      <div class="keys" id="p1keys">ปุ่ม <kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd></div>
       <div class="row"><span class="pips" id="pips1"></span><span class="len" id="len1">ยาว 4</span></div>
     </div>
     <div class="mid">
@@ -127,8 +127,8 @@ canvas#game{display:block;border-radius:10px;box-shadow:0 0 0 2px var(--line),0 
       <div class="rd" id="rdInfo">รอบที่ 1</div>
     </div>
     <div class="pl p2">
-      <div class="nm"><span class="chip" id="slow2" hidden>ช้าลง</span> ผู้เล่น 2</div>
-      <div class="keys">ปุ่มลูกศร <kbd>↑</kbd><kbd>←</kbd><kbd>↓</kbd><kbd>→</kbd></div>
+      <div class="nm"><span class="chip" id="slow2" hidden>ช้าลง</span> <span id="p2name">ผู้เล่น 2</span></div>
+      <div class="keys" id="p2keys">ปุ่มลูกศร <kbd>↑</kbd><kbd>←</kbd><kbd>↓</kbd><kbd>→</kbd></div>
       <div class="row"><span class="len" id="len2">ยาว 4</span><span class="pips" id="pips2"></span></div>
     </div>
   </div>
@@ -137,6 +137,16 @@ canvas#game{display:block;border-radius:10px;box-shadow:0 0 0 2px var(--line),0 
     <h2>เลือกฉาก</h2>
     <div class="stages" id="stages"></div>
     <div class="opts">
+      <div class="opt"><span class="lb">ผู้เล่น</span>
+        <div class="seg" id="modeSeg">
+          <button data-v="cpu">เล่นกับคอม</button><button data-v="pvp">2 คน</button>
+        </div>
+      </div>
+      <div class="opt" id="aiOpt"><span class="lb">ความเก่งของคอม</span>
+        <div class="seg" id="aiSeg">
+          <button data-v="easy">ง่าย</button><button data-v="medium">กลาง</button><button data-v="hard">ยาก</button>
+        </div>
+      </div>
       <div class="opt"><span class="lb">ความเร็ว</span>
         <div class="seg" id="speedSeg">
           <button data-v="slow">ช้า</button><button data-v="normal">ปกติ</button><button data-v="fast">เร็ว</button>
@@ -219,6 +229,9 @@ let stageIdx=Math.max(0,STAGES.findIndex(s=>s.id===store.get('stage','meadow')))
 let speedKey=store.get('speed','normal'); if(!SPEEDS[speedKey])speedKey='normal';
 let winTarget=+store.get('wins','3'); if(![1,3,5].includes(winTarget))winTarget=3;
 let muted=store.get('muted','0')==='1';
+let vsCPU=store.get('mode','cpu')==='cpu';
+let aiLevel=store.get('ai','medium'); if(!['easy','medium','hard'].includes(aiLevel))aiLevel='medium';
+const AI_NAMES={easy:'ง่าย',medium:'กลาง',hard:'ยาก'};
 
 // ---------- sound ----------
 let actx=null;
@@ -316,7 +329,12 @@ function renderMenu(){
   });
   for(const b of $('speedSeg').children)b.setAttribute('aria-pressed',b.dataset.v===speedKey);
   for(const b of $('winSeg').children)b.setAttribute('aria-pressed',+b.dataset.v===winTarget);
+  for(const b of $('modeSeg').children)b.setAttribute('aria-pressed',(b.dataset.v==='cpu')===vsCPU);
+  for(const b of $('aiSeg').children)b.setAttribute('aria-pressed',b.dataset.v===aiLevel);
+  $('aiOpt').hidden=!vsCPU;
 }
+$('modeSeg').onclick=e=>{const v=e.target.dataset.v;if(v){vsCPU=v==='cpu';store.set('mode',v);renderMenu()}};
+$('aiSeg').onclick=e=>{const v=e.target.dataset.v;if(v){aiLevel=v;store.set('ai',v);renderMenu()}};
 $('speedSeg').onclick=e=>{const v=e.target.dataset.v;if(v){speedKey=v;store.set('speed',v);renderMenu()}};
 $('winSeg').onclick=e=>{const v=e.target.dataset.v;if(v){winTarget=+v;store.set('wins',v);renderMenu()}};
 $('startBtn').onclick=()=>startMatch();
@@ -334,12 +352,19 @@ function makeSnake(p,x,y,dir){const dx=-DIRS[dir][0];const body=[];for(let i=0;i
 
 function startMatch(){
   stage=STAGES[stageIdx];scores=[0,0];round=1;
+  P_COLORS[1].name=vsCPU?'คอม':'ผู้เล่น 2';
+  $('p2name').textContent=vsCPU?`คอม (${AI_NAMES[aiLevel]})`:'ผู้เล่น 2';
+  $('p2keys').textContent=vsCPU?'คอมพิวเตอร์ควบคุม':'';
+  if(!vsCPU)$('p2keys').innerHTML='ปุ่มลูกศร <kbd>↑</kbd><kbd>←</kbd><kbd>↓</kbd><kbd>→</kbd>';
+  $('p1keys').innerHTML=vsCPU?'ปุ่ม <kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> หรือลูกศร':'ปุ่ม <kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd>';
+  document.querySelector('.pad.p2').style.visibility=vsCPU?'hidden':'';
   menu.hidden=true;hud.hidden=false;field.hidden=false;touch.hidden=false;
   $('stName').textContent=stage.name;
   resize();startRound();
 }
 function startRound(){
   snakes=[makeSnake(0,6,4,'right'),makeSnake(1,25,15,'left')];
+  snakes[1].ai=vsCPU?aiLevel:null;
   items=[];particles=[];floats=[];roundResult=null;gameTime=0;tickN=0;acc=0;
   spawn('apple');spawn('apple');
   nextCherry=rand(3000,6000);nextBanana=rand(5000,9000);
@@ -375,6 +400,7 @@ function tick(){
   tickN++;
   const movers=snakes.filter(s=>s.alive&&(s.slowUntil>gameTime?tickN%2===0:true));
   if(!movers.length)return;
+  for(const s of movers)if(s.ai)aiThink(s);
   const nh=new Map();
   for(const s of movers){
     if(s.queue.length){const d=s.queue.shift();if(d!==OPP[s.dir])s.dir=d}
@@ -421,6 +447,50 @@ function tick(){
     }
   }
   updateHud();
+}
+// ---------- computer player ----------
+// Scores each of the 3 possible turns: never step into a crash, avoid pockets smaller than its body,
+// head for the best fruit (cherry/banana count extra), and on hard, keep away from the rival's next move.
+const AI_CFG={
+  easy:  {mistake:.07,flood:false,headRisk:false,bonus:{apple:0,cherry:2,banana:2},lazy:.35},
+  medium:{mistake:.015,flood:true,room:4,headRisk:false,bonus:{apple:0,cherry:5,banana:5},lazy:0},
+  hard:  {mistake:0,flood:true,room:10,headRisk:true,bonus:{apple:0,cherry:9,banana:8},lazy:0},
+};
+function stepCell(x,y,d){const n=wrapPos(x+DIRS[d][0],y+DIRS[d][1]);return(n.x<0||n.y<0||n.x>=W||n.y>=H)?null:n}
+function aiThink(s){
+  const cfg=AI_CFG[s.ai],o=snakes[1-s.p],h=s.body[0];
+  const blocked=new Set(stage.obs);
+  for(const sn of snakes){const cells=(sn===s&&s.grow===0)?sn.body.slice(0,-1):sn.body;for(const b of cells)blocked.add(K(b.x,b.y))}
+  const rivalNext=new Set();
+  if(o.alive)for(const d of Object.keys(DIRS)){if(d===OPP[o.dir])continue;const n=stepCell(o.body[0].x,o.body[0].y,d);if(n)rivalNext.add(K(n.x,n.y))}
+  const opts=Object.keys(DIRS).filter(d=>d!==OPP[s.dir]);
+  const safe=opts.filter(d=>{const n=stepCell(h.x,h.y,d);return n&&!blocked.has(K(n.x,n.y))});
+  // easy: sometimes slow to react (keeps going straight while that is still safe)
+  if(cfg.lazy&&safe.includes(s.dir)&&Math.random()<cfg.lazy){s.queue=[];return}
+  // occasional random (but not suicidal) turn
+  if(cfg.mistake&&safe.length&&Math.random()<cfg.mistake){s.queue=[safe[Math.floor(Math.random()*safe.length)]];return}
+  let best=null,bestScore=-Infinity;
+  for(const d of opts){
+    const n=stepCell(h.x,h.y,d);let score=0;
+    if(!n||blocked.has(K(n.x,n.y))){score=-1e6}
+    else{
+      // BFS from the new head: reachable space and distance to fruit
+      const seen=new Set([K(n.x,n.y)]),q=[[n.x,n.y,0]];let target=Infinity;
+      for(let i=0;i<q.length;i++){const [x,y,dist]=q[i];
+        const it=items.find(t=>t.x===x&&t.y===y);
+        if(it)target=Math.min(target,dist-cfg.bonus[it.type]);
+        for(const dd in DIRS){const m=stepCell(x,y,dd);if(!m)continue;const k=K(m.x,m.y);if(seen.has(k)||blocked.has(k))continue;seen.add(k);q.push([m.x,m.y,dist+1])}}
+      const space=q.length;
+      if(cfg.flood&&space<s.body.length+s.grow+2)score-=5e4-space*100;
+      if(cfg.room)score+=Math.min(space,(s.body.length+s.grow)*3)*cfg.room; // prefer open areas over tight pockets
+      if(cfg.headRisk&&rivalNext.has(K(n.x,n.y)))score-=2e4;
+      score-=(target===Infinity?40:target)*10;
+      if(d===s.dir)score+=1; // prefer straight lines when tied
+      score+=Math.random();
+    }
+    if(score>bestScore){bestScore=score;best=d}
+  }
+  s.queue=[best];
 }
 function updateItems(){
   for(let i=items.length-1;i>=0;i--){const it=items[i];if(it.expires<=gameTime){items.splice(i,1);
@@ -577,7 +647,7 @@ const KEYMAP={KeyW:[0,'up'],KeyA:[0,'left'],KeyS:[0,'down'],KeyD:[0,'right'],Arr
 window.addEventListener('keydown',e=>{
   if(e.target.closest&&e.target.closest('button')&&(e.code==='Enter'||e.code==='Space')&&state==='menu')return; // let focused menu buttons work
   const m=KEYMAP[e.code];
-  if(m){if(state!=='menu')e.preventDefault();queueDir(m[0],m[1]);return}
+  if(m){if(state!=='menu')e.preventDefault();queueDir(vsCPU?0:m[0],m[1]);return}
   if(e.code==='Enter'||e.code==='NumpadEnter'){
     e.preventDefault();
     if(state==='menu')startMatch();else if(state==='roundover'&&!ov.hidden)nextRound();else if(state==='matchover')startMatch();else if(state==='paused')togglePause();
