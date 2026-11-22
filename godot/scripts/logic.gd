@@ -30,6 +30,8 @@ class Snake:
 	var ai := ""
 	var stuck_since := -1.0
 	var stuck_why := ""
+	var banana := 0          # held bananas (max 1)
+	var banana_at := 0.0
 
 
 var stage: Dictionary
@@ -197,6 +199,68 @@ func queue_dir(p: int, d: String) -> void:
 		s.queue.append(d)
 
 
+func _slow_rival(s: Snake, label: String) -> void:
+	var o: Snake = snakes[1 - s.p]
+	if not o.alive:
+		return
+	o.slow_until = game_time + 5000.0
+	events.append({"t": "banana", "p": s.p, "pos": s.body[0], "target": o.p, "tpos": o.body[0], "label": label})
+
+
+func use_banana(p: int) -> void:
+	var s: Snake = snakes[p]
+	if over or not s.alive or s.banana < 1:
+		return
+	s.banana = 0
+	_slow_rival(s, "ปากล้วย!")
+
+
+## A snake whose own body closes a loop around the rival's head wins at once.
+func _enclosed_by(S: Snake, O: Snake) -> bool:
+	var wall := {}
+	for b in S.body:
+		wall[b] = true
+	var h: Vector2i = O.body[0]
+	if wall.has(h):
+		return false
+	var wrap: bool = stage.get("wrap", false)
+	var seen := {h: true}
+	var q: Array = [h]
+	var i := 0
+	while i < q.size():
+		var c: Vector2i = q[i]
+		i += 1
+		if not wrap and (c.x == 0 or c.y == 0 or c.x == W - 1 or c.y == H - 1):
+			return false  # reached the open edge
+		for d in DIRS:
+			var n: Vector2i = c + DIRS[d]
+			if wrap:
+				n = Vector2i(posmod(n.x, W), posmod(n.y, H))
+			elif not _in_bounds(n):
+				continue
+			if seen.has(n) or wall.has(n):
+				continue
+			seen[n] = true
+			q.append(n)
+	return q.size() <= (W * H - S.body.size()) / 2
+
+
+func _check_enclosed() -> void:
+	var gone: Array = []
+	for O in snakes:
+		var S: Snake = snakes[1 - O.p]
+		if O.alive and S.alive and _enclosed_by(S, O):
+			gone.append(O)
+	if gone.is_empty():
+		return
+	for O in gone:
+		O.alive = false
+		O.dead = "enclosed"
+	over = true
+	dead_list = gone
+	events.append({"t": "crash", "snakes": gone})
+
+
 func stuck_left(s: Snake) -> float:
 	return maxf(0.0, STUCK_MS - (game_time - s.stuck_since)) if (s.alive and s.stuck_since >= 0.0) else -1.0
 
@@ -232,6 +296,13 @@ func tick() -> void:
 	for s in movers:
 		if s.ai != "":
 			_ai_think(s)
+	for s in snakes:
+		# the computer fires its banana when the rival is close, or after a short wait
+		if s.ai != "" and s.alive and s.banana > 0:
+			var o: Snake = snakes[1 - s.p]
+			var d: int = absi(o.body[0].x - s.body[0].x) + absi(o.body[0].y - s.body[0].y)
+			if d <= 8 or game_time - s.banana_at > (2000.0 if s.ai == "easy" else 6000.0):
+				use_banana(s.p)
 	var nh := {}
 	for s in movers:
 		if s.queue.size() > 0:
@@ -306,9 +377,14 @@ func tick() -> void:
 				events.append({"t": "cherry", "p": s.p, "pos": h, "target": o.p, "tpos": o.body[0], "n": n, "cut": cut})
 				next_cherry = game_time + randf_range(4000, 8000)
 			"banana":
-				o.slow_until = game_time + 5000.0
-				events.append({"t": "banana", "p": s.p, "pos": h, "target": o.p, "tpos": o.body[0]})
+				if s.banana > 0:
+					_slow_rival(s, "กล้วยลูกที่ 2!")  # already holding one: the second fires at once
+				else:
+					s.banana = 1
+					s.banana_at = game_time
+					events.append({"t": "banana_get", "p": s.p, "pos": h})
 				next_banana = game_time + randf_range(6000, 10000)
+	_check_enclosed()
 
 
 func update_items() -> void:

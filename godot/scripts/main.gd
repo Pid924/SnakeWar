@@ -611,9 +611,9 @@ func _start_match() -> void:
 	if watch:
 		hint_label.text = "โหมดดูคอมสู้กัน · Space หยุดพัก · Esc เมนู"
 	elif vs_cpu:
-		hint_label.text = "ผู้เล่น: W A S D หรือลูกศร · Space หยุดพัก · Esc เมนู"
+		hint_label.text = "ผู้เล่น: W A S D หรือลูกศร · E ใช้กล้วย · Space หยุดพัก · Esc เมนู"
 	else:
-		hint_label.text = "ผู้เล่น 1: W A S D · ผู้เล่น 2: ลูกศร · Space หยุดพัก · Esc เมนู"
+		hint_label.text = "ผู้เล่น 1: W A S D, กล้วย E · ผู้เล่น 2: ลูกศร, กล้วย Enter · Space หยุดพัก"
 	_build_board(stages[stage_idx])
 	stage_label.text = stages[stage_idx]["name"]
 	_start_round()
@@ -667,6 +667,7 @@ func _reason(code: String) -> String:
 		"self": return "ติดตัวเอง"
 		"other": return "ถูกล้อมปิดทาง"
 		"headon": return "หัวชนหัว"
+		"enclosed": return "ถูกขดล้อมจนมิด"
 	return ""
 
 
@@ -683,9 +684,12 @@ func _handle_events() -> void:
 				_float_text(Vector2(e["tpos"]), ("หด -%d" % e["n"]) if e["n"] > 0 else "สั้นสุดแล้ว", P_MAIN[e["target"]])
 				for c in e["cut"]:
 					_burst(Vector2(c), P_MAIN[e["target"]], 8)
+			"banana_get":
+				_play("apple")
+				_float_text(Vector2(e["pos"]), "เก็บกล้วย!", GOLD)
 			"banana":
 				_play("banana")
-				_float_text(Vector2(e["pos"]), "กล้วย!", GOLD)
+				_float_text(Vector2(e["pos"]), e["label"], GOLD)
 				_float_text(Vector2(e["tpos"]), "ช้าลง!", GOLD)
 			"stuck":
 				_play("bump")
@@ -723,7 +727,7 @@ func _end_round() -> void:
 	else:
 		var why := ""
 		for s in dead:
-			why += ("" if why == "" else " และ ") + _player_name(s.p) + " " + _reason(s.dead) + " ค้างนาน 3 วินาที"
+			why += ("" if why == "" else " และ ") + _player_name(s.p) + " " + _reason(s.dead) + ("" if s.dead == "enclosed" else " ค้างนาน 3 วินาที")
 		var head: String = "เสมอ!" if winner < 0 else "%s ได้แต้ม" % _player_name(winner)
 		_show_overlay(head, why + "\n" + score_txt, [["รอบต่อไป (Enter)", _next_round], ["เมนู", _to_menu]],
 			Color.WHITE if winner < 0 else P_MAIN[winner])
@@ -811,6 +815,15 @@ func _unhandled_input(event: InputEvent) -> void:
 				logic.queue_dir(0 if vs_cpu else m[0], m[1])
 		get_viewport().set_input_as_handled()
 		return
+	if state == "playing" and not watch:
+		if pk == KEY_E or pk == KEY_Q:
+			logic.use_banana(0)
+			_handle_events()
+			return
+		if pk == KEY_ENTER or pk == KEY_KP_ENTER or pk == KEY_SLASH:
+			logic.use_banana(0 if vs_cpu else 1)
+			_handle_events()
+			return
 	match pk:
 		KEY_ENTER, KEY_KP_ENTER:
 			match state:
@@ -1073,7 +1086,7 @@ func _build_ui() -> void:
 	title.add_theme_font_size_override("normal_font_size", 64)
 	title.text = "[color=#4cc9ff]สงคราม[/color][color=#ff5fa2]งู[/color] [color=#ffd23f][font_size=34]3D[/font_size][/color]"
 	mv.add_child(title)
-	mv.add_child(_label("ชนแล้วจะติดค้าง หาทางออกไม่ได้ใน 3 วินาทีถึงแพ้ ล้อมปิดทางศัตรูให้ได้!", 18, Color("aaa0bd")))
+	mv.add_child(_label("ชนแล้วติดค้าง หาทางออกไม่ได้ใน 3 วิแพ้ · ขดตัวล้อมศัตรูได้ ศัตรูข้างในแพ้ทันที!", 18, Color("aaa0bd")))
 
 	mv.add_child(_label("เลือกฉาก", 20, Color.WHITE, true))
 	var sr := HBoxContainer.new()
@@ -1099,7 +1112,7 @@ func _build_ui() -> void:
 	legend.add_theme_constant_override("separation", 22)
 	legend.add_child(_label("แอปเปิ้ล: ตัวเรายาว +3", 16, Color("ff7a6e")))
 	legend.add_child(_label("เชอร์รี่: ศัตรูหด -3", 16, Color("ff6b8e")))
-	legend.add_child(_label("กล้วย: ศัตรูช้าลง 5 วิ", 16, GOLD))
+	legend.add_child(_label("กล้วย: เก็บไว้ กด E (ผู้เล่น 2 กด Enter) ศัตรูช้า 5 วิ", 16, GOLD))
 	mv.add_child(legend)
 
 	var start_row := HBoxContainer.new()
@@ -1196,6 +1209,14 @@ func _update_hud() -> void:
 			p_status[p].text = "ติด! เหลือ %.1f วิ" % (sl / 1000.0)
 			p_status[p].add_theme_color_override("font_color", Color("ff4b3e"))
 		else:
-			p_status[p].text = ("กินกล้วย ช้าลง %.1f วิ" % (left / 1000.0)) if (left > 0 and s.alive) else " "
+			var parts: Array = []
+			if left > 0 and s.alive:
+				parts.append("ช้าลง %.1f วิ" % (left / 1000.0))
+			if s.alive and s.banana > 0:
+				if s.ai != "":
+					parts.append("ถือกล้วย")
+				else:
+					parts.append("กล้วยพร้อม กด %s" % ("E" if p == 0 else "Enter"))
+			p_status[p].text = " · ".join(parts) if parts.size() > 0 else " "
 			p_status[p].add_theme_color_override("font_color", GOLD)
 	round_label.text = "รอบที่ %d · ชนะ %d รอบได้แชมป์" % [round_n, win_target]
