@@ -17,6 +17,7 @@ var stage_idx := 0
 var speed_key := "normal"
 var win_target := 3
 var vs_cpu := true
+var watch := false
 var ai_level := "medium"
 var muted := false
 
@@ -39,6 +40,7 @@ var item_nodes := {}
 var seg_mm: Array = []
 var heads: Array = []
 var daze: Array = []
+var stuck_tags: Array = []
 var font_bold: FontFile
 var mats := {}
 
@@ -106,6 +108,7 @@ func _load_settings() -> void:
 	speed_key = cf.get_value("game", "speed", "normal")
 	win_target = cf.get_value("game", "wins", 3)
 	vs_cpu = cf.get_value("game", "vs_cpu", true)
+	watch = cf.get_value("game", "watch", false) and vs_cpu
 	ai_level = cf.get_value("game", "ai", "medium")
 	muted = cf.get_value("game", "muted", false)
 	if not SPEEDS.has(speed_key): speed_key = "normal"
@@ -119,6 +122,7 @@ func _save_settings() -> void:
 	cf.set_value("game", "speed", speed_key)
 	cf.set_value("game", "wins", win_target)
 	cf.set_value("game", "vs_cpu", vs_cpu)
+	cf.set_value("game", "watch", watch)
 	cf.set_value("game", "ai", ai_level)
 	cf.set_value("game", "muted", muted)
 	cf.save("user://settings.cfg")
@@ -255,6 +259,19 @@ func _build_world() -> void:
 			_mesh(_sphere(0.09), _mat("daze", GOLD, 0.4, 0.0, 2.5), Vector3.ZERO, dz)
 		dz.visible = false
 		daze.append(dz)
+
+		var tag := Label3D.new()
+		tag.font = load("res://fonts/Mitr-SemiBold.ttf")
+		tag.font_size = 64
+		tag.pixel_size = 0.012
+		tag.outline_size = 16
+		tag.outline_modulate = Color(0, 0, 0, 0.75)
+		tag.modulate = Color("ff4b3e")
+		tag.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+		tag.no_depth_test = true
+		tag.visible = false
+		add_child(tag)
+		stuck_tags.append(tag)
 
 
 func _clear_board() -> void:
@@ -562,6 +579,16 @@ func _draw_snakes(T: float) -> void:
 		var d: Vector2i = SnakeLogic.DIRS[s.dir]
 		var target_rot := atan2(float(d.x), float(d.y))
 		head.rotation.y = lerp_angle(head.rotation.y, target_rot, 0.35)
+		var tag: Label3D = stuck_tags[p]
+		var sl: float = logic.stuck_left(s)
+		tag.visible = sl >= 0.0
+		if tag.visible:
+			tag.text = "%.1f" % (sl / 1000.0)
+			tag.position = head.position + Vector3(0, 1.3, 0)
+			tag.scale = Vector3.ONE * (1.0 + 0.12 * sin(t * 18.0))
+			head.scale = Vector3.ONE * (1.0 + 0.1 * absf(sin(t * 12.0)))
+		else:
+			head.scale = Vector3.ONE
 		var dz: Node3D = daze[p]
 		dz.visible = logic.is_slowed(s)
 		if dz.visible:
@@ -579,15 +606,21 @@ func _start_match() -> void:
 	round_n = 1
 	menu.visible = false
 	hud.visible = true
-	p_name[1].text = ("คอม (%s)" % AI_NAMES[ai_level]) if vs_cpu else "ผู้เล่น 2"
-	hint_label.text = "ผู้เล่น: W A S D หรือลูกศร · Space หยุดพัก · Esc เมนู" if vs_cpu else "ผู้เล่น 1: W A S D · ผู้เล่น 2: ลูกศร · Space หยุดพัก · Esc เมนู"
+	p_name[0].text = ("%s (%s)" % [_player_name(0), AI_NAMES[ai_level]]) if watch else "ผู้เล่น 1"
+	p_name[1].text = ("%s (%s)" % [_player_name(1), AI_NAMES[ai_level]]) if vs_cpu else "ผู้เล่น 2"
+	if watch:
+		hint_label.text = "โหมดดูคอมสู้กัน · Space หยุดพัก · Esc เมนู"
+	elif vs_cpu:
+		hint_label.text = "ผู้เล่น: W A S D หรือลูกศร · Space หยุดพัก · Esc เมนู"
+	else:
+		hint_label.text = "ผู้เล่น 1: W A S D · ผู้เล่น 2: ลูกศร · Space หยุดพัก · Esc เมนู"
 	_build_board(stages[stage_idx])
 	stage_label.text = stages[stage_idx]["name"]
 	_start_round()
 
 
 func _start_round() -> void:
-	logic.start_round(stages[stage_idx], ai_level if (vs_cpu or autoplay) else "")
+	logic.start_round(stages[stage_idx], ai_level if (vs_cpu or autoplay) else "", ai_level if watch else "")
 	if autoplay:
 		logic.snakes[0].ai = "hard"
 	for id in item_nodes:
@@ -621,6 +654,8 @@ func _toggle_pause() -> void:
 
 
 func _player_name(p: int) -> String:
+	if watch:
+		return "คอม %d" % (p + 1)
 	if p == 1 and vs_cpu:
 		return "คอม"
 	return "ผู้เล่น %d" % (p + 1)
@@ -628,9 +663,9 @@ func _player_name(p: int) -> String:
 
 func _reason(code: String) -> String:
 	match code:
-		"wall": return "ชน" + stages[stage_idx]["wall"]
-		"self": return "ชนตัวเอง"
-		"other": return "ชนตัวอีกฝ่าย"
+		"wall": return "ติด" + stages[stage_idx]["wall"]
+		"self": return "ติดตัวเอง"
+		"other": return "ถูกล้อมปิดทาง"
 		"headon": return "หัวชนหัว"
 	return ""
 
@@ -652,6 +687,13 @@ func _handle_events() -> void:
 				_play("banana")
 				_float_text(Vector2(e["pos"]), "กล้วย!", GOLD)
 				_float_text(Vector2(e["tpos"]), "ช้าลง!", GOLD)
+			"stuck":
+				_play("bump")
+				shake = maxf(shake, 0.25)
+				_float_text(Vector2(e["pos"]), "ติด!", Color("ff4b3e"))
+				if autoplay and shot_path != "" and not has_meta("stuck_shot"):
+					set_meta("stuck_shot", true)
+					get_tree().create_timer(1.0).timeout.connect(_screenshot.bind("_stuck"))
 			"crash":
 				_play("crash")
 				shake = 0.6
@@ -681,7 +723,7 @@ func _end_round() -> void:
 	else:
 		var why := ""
 		for s in dead:
-			why += ("" if why == "" else " และ ") + _player_name(s.p) + " " + _reason(s.dead)
+			why += ("" if why == "" else " และ ") + _player_name(s.p) + " " + _reason(s.dead) + " ค้างนาน 3 วินาที"
 		var head: String = "เสมอ!" if winner < 0 else "%s ได้แต้ม" % _player_name(winner)
 		_show_overlay(head, why + "\n" + score_txt, [["รอบต่อไป (Enter)", _next_round], ["เมนู", _to_menu]],
 			Color.WHITE if winner < 0 else P_MAIN[winner])
@@ -765,7 +807,8 @@ func _unhandled_input(event: InputEvent) -> void:
 	if dir_map.has(pk):
 		if state == "playing" or state == "countdown":
 			var m: Array = dir_map[pk]
-			logic.queue_dir(0 if vs_cpu else m[0], m[1])
+			if not watch:
+				logic.queue_dir(0 if vs_cpu else m[0], m[1])
 		get_viewport().set_input_as_handled()
 		return
 	match pk:
@@ -828,6 +871,7 @@ func _build_audio() -> void:
 	sfx["crash"] = _tone([[220, 50, 0.45]], "saw", 0.4)
 	sfx["count"] = _tone([[440, 440, 0.1]])
 	sfx["go"] = _tone([[880, 880, 0.18]])
+	sfx["bump"] = _tone([[150, 90, 0.12]], "square", 0.45)
 	sfx["win"] = _tone([[523, 523, 0.12], [659, 659, 0.12], [784, 784, 0.12], [1046, 1046, 0.3]])
 	for i in 6:
 		var ap := AudioStreamPlayer.new()
@@ -917,7 +961,9 @@ func _seg_row(title: String, key: String, opts: Array) -> HBoxContainer:
 
 func _on_seg(key: String, value: Variant) -> void:
 	match key:
-		"mode": vs_cpu = value
+		"mode":
+			vs_cpu = value != "pvp"
+			watch = value == "watch"
 		"ai": ai_level = value
 		"speed": speed_key = value
 		"wins": win_target = value
@@ -1027,7 +1073,7 @@ func _build_ui() -> void:
 	title.add_theme_font_size_override("normal_font_size", 64)
 	title.text = "[color=#4cc9ff]สงคราม[/color][color=#ff5fa2]งู[/color] [color=#ffd23f][font_size=34]3D[/font_size][/color]"
 	mv.add_child(title)
-	mv.add_child(_label("ดวลงูกับคอม หรือเล่น 2 คนบนคีย์บอร์ดเดียวกัน ใครชนก่อนแพ้", 18, Color("aaa0bd")))
+	mv.add_child(_label("ชนแล้วจะติดค้าง หาทางออกไม่ได้ใน 3 วินาทีถึงแพ้ ล้อมปิดทางศัตรูให้ได้!", 18, Color("aaa0bd")))
 
 	mv.add_child(_label("เลือกฉาก", 20, Color.WHITE, true))
 	var sr := HBoxContainer.new()
@@ -1043,7 +1089,7 @@ func _build_ui() -> void:
 	stage_desc = _label("", 17, Color("d8d0e6"))
 	mv.add_child(stage_desc)
 
-	mv.add_child(_seg_row("ผู้เล่น", "mode", [["เล่นกับคอม", true], ["2 คน", false]]))
+	mv.add_child(_seg_row("ผู้เล่น", "mode", [["เล่นกับคอม", "cpu"], ["2 คน", "pvp"], ["ดูคอมสู้กัน", "watch"]]))
 	ai_row = _seg_row("ความเก่งของคอม", "ai", [["ง่าย", "easy"], ["กลาง", "medium"], ["ยาก", "hard"]])
 	mv.add_child(ai_row)
 	mv.add_child(_seg_row("ความเร็ว", "speed", [["ช้า", "slow"], ["ปกติ", "normal"], ["เร็ว", "fast"]]))
@@ -1106,7 +1152,7 @@ func _refresh_menu() -> void:
 	for i in stage_buttons.size():
 		stage_buttons[i].set_pressed_no_signal(i == stage_idx)
 	stage_desc.text = stages[stage_idx]["desc"]
-	var cur := {"mode": vs_cpu, "ai": ai_level, "speed": speed_key, "wins": win_target}
+	var cur := {"mode": "watch" if watch else ("cpu" if vs_cpu else "pvp"), "ai": ai_level, "speed": speed_key, "wins": win_target}
 	for key in seg_groups:
 		for pair in seg_groups[key]:
 			pair[0].set_pressed_no_signal(pair[1] == cur[key])
@@ -1145,5 +1191,11 @@ func _update_hud() -> void:
 		var len_txt := "ยาว %d" % (s.body.size() + s.grow)
 		p_info[p].text = (pips + "  " + len_txt) if p == 0 else (len_txt + "  " + pips)
 		var left: float = s.slow_until - logic.game_time
-		p_status[p].text = ("กินกล้วย ช้าลง %.1f วิ" % (left / 1000.0)) if (left > 0 and s.alive) else " "
+		var sl: float = logic.stuck_left(s)
+		if sl >= 0.0:
+			p_status[p].text = "ติด! เหลือ %.1f วิ" % (sl / 1000.0)
+			p_status[p].add_theme_color_override("font_color", Color("ff4b3e"))
+		else:
+			p_status[p].text = ("กินกล้วย ช้าลง %.1f วิ" % (left / 1000.0)) if (left > 0 and s.alive) else " "
+			p_status[p].add_theme_color_override("font_color", GOLD)
 	round_label.text = "รอบที่ %d · ชนะ %d รอบได้แชมป์" % [round_n, win_target]
