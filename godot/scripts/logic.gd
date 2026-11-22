@@ -4,14 +4,15 @@ extends RefCounted
 ## No nodes here, so the view (main.gd) only reads state and the `events` list after each tick.
 
 const W := 32
+const STUCK_MS := 3000.0  # a blocked snake is out only after being stuck this long
 const H := 20
 const DIRS := {"up": Vector2i(0, -1), "down": Vector2i(0, 1), "left": Vector2i(-1, 0), "right": Vector2i(1, 0)}
 const OPP := {"up": "down", "down": "up", "left": "right", "right": "left"}
 
 const AI_CFG := {
-	"easy": {"mistake": 0.07, "flood": false, "head_risk": false, "room": 0, "lazy": 0.35, "bonus": {"apple": 0, "cherry": 2, "banana": 2}},
-	"medium": {"mistake": 0.015, "flood": true, "head_risk": false, "room": 4, "lazy": 0.0, "bonus": {"apple": 0, "cherry": 5, "banana": 5}},
-	"hard": {"mistake": 0.0, "flood": true, "head_risk": true, "room": 10, "lazy": 0.0, "bonus": {"apple": 0, "cherry": 9, "banana": 8}},
+	"easy": {"trap": 0, "mistake": 0.07, "flood": false, "head_risk": false, "room": 0, "lazy": 0.35, "bonus": {"apple": 0, "cherry": 2, "banana": 2}},
+	"medium": {"trap": 4, "mistake": 0.015, "flood": true, "head_risk": false, "room": 4, "lazy": 0.0, "bonus": {"apple": 0, "cherry": 5, "banana": 5}},
+	"hard": {"trap": 10, "mistake": 0.0, "flood": true, "head_risk": true, "room": 10, "lazy": 0.0, "bonus": {"apple": 0, "cherry": 9, "banana": 8}},
 }
 
 
@@ -27,6 +28,8 @@ class Snake:
 	var slow_until := 0.0
 	var dead := ""
 	var ai := ""
+	var stuck_since := -1.0
+	var stuck_why := ""
 
 
 var stage: Dictionary
@@ -121,11 +124,12 @@ func _make_snake(p: int, head: Vector2i, dir: String) -> Snake:
 	return s
 
 
-func start_round(st: Dictionary, ai_level: String) -> void:
+func start_round(st: Dictionary, ai_level: String, ai_p1 := "") -> void:
 	stage = st
 	obs = build_obstacles(st)
 	snakes = [_make_snake(0, Vector2i(6, 4), "right"), _make_snake(1, Vector2i(25, 15), "left")]
 	snakes[1].ai = ai_level
+	snakes[0].ai = ai_p1
 	items.clear()
 	events.clear()
 	dead_list.clear()
@@ -193,8 +197,32 @@ func queue_dir(p: int, d: String) -> void:
 		s.queue.append(d)
 
 
+func stuck_left(s: Snake) -> float:
+	return maxf(0.0, STUCK_MS - (game_time - s.stuck_since)) if (s.alive and s.stuck_since >= 0.0) else -1.0
+
+
+func _blocked_by(s: Snake, h: Vector2i, moving: Dictionary) -> String:
+	if not _in_bounds(h) or obs.has(h):
+		return "wall"
+	for o in snakes:
+		var mv: bool = moving.has(o) and o.grow == 0
+		var cells: Array = o.body.slice(0, o.body.size() - 1) if mv else o.body
+		if h in cells:
+			return "self" if o == s else "other"
+	return ""
+
+
 func tick() -> void:
 	tick_n += 1
+	var gone: Array = snakes.filter(func(x): return x.alive and x.stuck_since >= 0.0 and game_time - x.stuck_since >= STUCK_MS)
+	if gone.size() > 0:
+		for s in gone:
+			s.alive = false
+			s.dead = s.stuck_why if s.stuck_why != "" else "wall"
+		over = true
+		dead_list = gone
+		events.append({"t": "crash", "snakes": gone})
+		return
 	var movers: Array = []
 	for s in snakes:
 		if s.alive and (not is_slowed(s) or tick_n % 2 == 0):
@@ -211,35 +239,40 @@ func tick() -> void:
 			if d != OPP[s.dir]:
 				s.dir = d
 		nh[s] = wrap_pos(s.body[0] + DIRS[s.dir])
-	# collisions
+	# collisions: a blocked snake is not out, it stays put and gets stuck
+	var moving := {}
 	for s in movers:
-		var h: Vector2i = nh[s]
-		if not _in_bounds(h) or obs.has(h):
-			s.dead = "wall"
+		moving[s] = true
+	var why := {}
+	for _pass in 4:
+		var changed := false
+		for s in moving.keys():
+			var r := _blocked_by(s, nh[s], moving)
+			if r != "":
+				moving.erase(s)
+				why[s] = r
+				changed = true
+		if moving.size() == 2:
+			var a: Snake = moving.keys()[0]
+			var b: Snake = moving.keys()[1]
+			var same: bool = nh[a] == nh[b]
+			var swap: bool = nh[a] == b.body[0] and nh[b] == a.body[0]
+			if same or swap:
+				moving.clear()
+				why[a] = "headon"
+				why[b] = "headon"
+				changed = true
+		if not changed:
+			break
+	for s in movers:
+		if moving.has(s):
+			s.stuck_since = -1.0
 			continue
-		for o in snakes:
-			var moving: bool = nh.has(o) and o.grow == 0
-			var cells: Array = o.body.slice(0, o.body.size() - 1) if moving else o.body
-			if h in cells:
-				s.dead = "self" if o == s else "other"
-				break
-	if movers.size() == 2:
-		var a: Snake = movers[0]
-		var b: Snake = movers[1]
-		var same: bool = nh[a] == nh[b]
-		var swap: bool = nh[a] == b.body[0] and nh[b] == a.body[0]
-		if same or swap:
-			a.dead = "headon"
-			b.dead = "headon"
-	var dead: Array = movers.filter(func(x): return x.dead != "")
-	if dead.size() > 0:
-		for s in dead:
-			s.alive = false
-		over = true
-		dead_list = dead
-		events.append({"t": "crash", "snakes": dead})
-		return
-	for s in movers:
+		s.stuck_why = why[s]
+		if s.stuck_since < 0.0:
+			s.stuck_since = game_time
+			events.append({"t": "stuck", "p": s.p, "pos": s.body[0]})
+	for s in moving:
 		s.prev = s.body.duplicate()
 		s.moved_tick = tick_n
 		s.body.push_front(nh[s])
@@ -248,7 +281,7 @@ func tick() -> void:
 		else:
 			s.body.pop_back()
 	# fruit
-	for s in movers:
+	for s in moving:
 		var h: Vector2i = s.body[0]
 		var idx := -1
 		for i in items.size():
@@ -309,6 +342,22 @@ func _has_item(type: String) -> bool:
 func _step(v: Vector2i, d: String) -> Variant:
 	var n := wrap_pos(v + DIRS[d])
 	return n if _in_bounds(n) else null
+
+
+func _reach(start: Vector2i, blocked: Dictionary, cap: int) -> int:
+	var seen := {start: true}
+	var q: Array = [start]
+	var i := 0
+	while i < q.size() and q.size() <= cap:
+		var c: Vector2i = q[i]
+		i += 1
+		for d in DIRS:
+			var m = _step(c, d)
+			if m == null or seen.has(m) or blocked.has(m):
+				continue
+			seen[m] = true
+			q.append(m)
+	return mini(cap, q.size() - 1)
 
 
 func _ai_think(s: Snake) -> void:
@@ -373,6 +422,11 @@ func _ai_think(s: Snake) -> void:
 				score -= 5e4 - space * 100
 			if cfg["room"] > 0:
 				score += mini(space, need * 3) * cfg["room"]
+			if cfg["trap"] > 0 and o.alive:
+				# squeeze the rival: the fewer cells it can still reach after this move, the better
+				blocked[n] = true
+				score += (80 - _reach(o.body[0], blocked, 80)) * cfg["trap"]
+				blocked.erase(n)
 			if cfg["head_risk"] and rival_next.has(n):
 				score -= 2e4
 			score -= (40.0 if target == INF else target) * 10.0

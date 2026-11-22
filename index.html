@@ -45,6 +45,7 @@ h1 .a{color:var(--p1)} h1 .b{color:var(--p2)}
 .pip{width:12px;height:12px;border-radius:50%;border:2px solid var(--line)}
 .p1 .pip.on{background:var(--p1);border-color:var(--p1)} .p2 .pip.on{background:var(--p2);border-color:var(--p2)}
 .chip{font-size:12px;padding:1px 8px;border-radius:999px;background:var(--gold);color:#2a1e00;font-weight:600}
+.chip.stuck{background:var(--red);color:#fff}
 .len{font-variant-numeric:tabular-nums}
 .mid{display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:0 6px;min-width:0}
 .mid .st{font-family:var(--display);font-size:17px}
@@ -111,14 +112,14 @@ canvas#game{display:block;border-radius:10px;box-shadow:0 0 0 2px var(--line),0 
   <header>
     <div class="brand">
       <h1><span class="a">สงคราม</span><span class="b">งู</span></h1>
-      <span class="tag">ดวลงูกับคอม หรือเล่น 2 คนบนคีย์บอร์ดเดียวกัน ใครชนก่อนแพ้</span>
+      <span class="tag">ดวลงูกับคอม เล่น 2 คน หรือดูคอมสู้กัน ใครโดนล้อมจนไม่มีทางไปแพ้</span>
     </div>
     <div style="display:flex;gap:8px;flex-wrap:wrap"><a class="ghost" href="3d/" style="text-decoration:none;color:var(--gold)">เล่นเวอร์ชัน 3D</a><button class="ghost" id="muteBtn" aria-pressed="false">เสียง: เปิด</button></div>
   </header>
 
   <div class="hud" id="hud" hidden>
     <div class="pl p1">
-      <div class="nm">ผู้เล่น 1 <span class="chip" id="slow1" hidden>ช้าลง</span></div>
+      <div class="nm"><span id="p1name">ผู้เล่น 1</span> <span class="chip" id="slow1" hidden>ช้าลง</span></div>
       <div class="keys" id="p1keys">ปุ่ม <kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd></div>
       <div class="row"><span class="pips" id="pips1"></span><span class="len" id="len1">ยาว 4</span></div>
     </div>
@@ -139,7 +140,7 @@ canvas#game{display:block;border-radius:10px;box-shadow:0 0 0 2px var(--line),0 
     <div class="opts">
       <div class="opt"><span class="lb">ผู้เล่น</span>
         <div class="seg" id="modeSeg">
-          <button data-v="cpu">เล่นกับคอม</button><button data-v="pvp">2 คน</button>
+          <button data-v="cpu">เล่นกับคอม</button><button data-v="pvp">2 คน</button><button data-v="watch">ดูคอมสู้กัน</button>
         </div>
       </div>
       <div class="opt" id="aiOpt"><span class="lb">ความเก่งของคอม</span>
@@ -184,7 +185,7 @@ canvas#game{display:block;border-radius:10px;box-shadow:0 0 0 2px var(--line),0 
     <div class="li"><canvas data-item="apple" width="40" height="40" style="width:40px;height:40px"></canvas><div><b>แอปเปิ้ล</b><span>ตัวเรายาวขึ้น 3 ช่อง</span></div></div>
     <div class="li"><canvas data-item="cherry" width="40" height="40" style="width:40px;height:40px"></canvas><div><b>เชอร์รี่</b><span>ศัตรูหดสั้นลง 3 ช่อง (โผล่เป็นพักๆ)</span></div></div>
     <div class="li"><canvas data-item="banana" width="40" height="40" style="width:40px;height:40px"></canvas><div><b>กล้วย</b><span>ศัตรูช้าลงครึ่งหนึ่ง 5 วินาที (โผล่เป็นพักๆ)</span></div></div>
-    <div class="li"><div><b>กติกา</b><span>ชนกำแพง ชนตัวเอง หรือชนตัวอีกฝ่ายก่อน แพ้รอบนั้น ถ้าหัวชนหัวพร้อมกันนับเสมอ</span></div></div>
+    <div class="li"><div><b>กติกา</b><span>ชนแล้วยังไม่ตาย งูจะติดค้าง ถ้าหาทางออกไม่ได้ภายใน 3 วินาทีถึงแพ้ ดังนั้นต้องล้อมปิดทางศัตรู ถ้าติดตายพร้อมกันนับเสมอ</span></div></div>
   </div>
 </div>
 
@@ -229,7 +230,9 @@ let stageIdx=Math.max(0,STAGES.findIndex(s=>s.id===store.get('stage','meadow')))
 let speedKey=store.get('speed','normal'); if(!SPEEDS[speedKey])speedKey='normal';
 let winTarget=+store.get('wins','3'); if(![1,3,5].includes(winTarget))winTarget=3;
 let muted=store.get('muted','0')==='1';
-let vsCPU=store.get('mode','cpu')==='cpu';
+let mode=store.get('mode','cpu'); if(!['cpu','pvp','watch'].includes(mode))mode='cpu';
+let vsCPU=mode!=='pvp', watch=mode==='watch';
+const STUCK_MS=3000;
 let aiLevel=store.get('ai','medium'); if(!['easy','medium','hard'].includes(aiLevel))aiLevel='medium';
 const AI_NAMES={easy:'ง่าย',medium:'กลาง',hard:'ยาก'};
 
@@ -250,6 +253,7 @@ const SFX={
   crash(){tone(220,.45,'sawtooth',.07,50)},
   count(){tone(440,.1,'square',.04)},
   go(){tone(880,.18,'square',.05)},
+  bump(){tone(150,.12,'square',.06,90)},
   win(){[523,659,784,1046].forEach((f,i)=>tone(f,.16,'square',.05,0,i*.12))},
 };
 
@@ -329,11 +333,11 @@ function renderMenu(){
   });
   for(const b of $('speedSeg').children)b.setAttribute('aria-pressed',b.dataset.v===speedKey);
   for(const b of $('winSeg').children)b.setAttribute('aria-pressed',+b.dataset.v===winTarget);
-  for(const b of $('modeSeg').children)b.setAttribute('aria-pressed',(b.dataset.v==='cpu')===vsCPU);
+  for(const b of $('modeSeg').children)b.setAttribute('aria-pressed',b.dataset.v===mode);
   for(const b of $('aiSeg').children)b.setAttribute('aria-pressed',b.dataset.v===aiLevel);
   $('aiOpt').hidden=!vsCPU;
 }
-$('modeSeg').onclick=e=>{const v=e.target.dataset.v;if(v){vsCPU=v==='cpu';store.set('mode',v);renderMenu()}};
+$('modeSeg').onclick=e=>{const v=e.target.dataset.v;if(v){mode=v;vsCPU=v!=='pvp';watch=v==='watch';store.set('mode',v);renderMenu()}};
 $('aiSeg').onclick=e=>{const v=e.target.dataset.v;if(v){aiLevel=v;store.set('ai',v);renderMenu()}};
 $('speedSeg').onclick=e=>{const v=e.target.dataset.v;if(v){speedKey=v;store.set('speed',v);renderMenu()}};
 $('winSeg').onclick=e=>{const v=e.target.dataset.v;if(v){winTarget=+v;store.set('wins',v);renderMenu()}};
@@ -348,16 +352,19 @@ let nextCherry=0,nextBanana=0,particles=[],floats=[],roundResult=null,shake=0;
 const rand=(a,b)=>a+Math.random()*(b-a);
 
 function makeSnake(p,x,y,dir){const dx=-DIRS[dir][0];const body=[];for(let i=0;i<4;i++)body.push({x:x+dx*i,y});
-  return {p,body,dir,queue:[],grow:0,alive:true,slowUntil:0,dead:null}}
+  return {p,body,dir,queue:[],grow:0,alive:true,slowUntil:0,dead:null,stuckSince:-1,stuckWhy:null}}
 
 function startMatch(){
   stage=STAGES[stageIdx];scores=[0,0];round=1;
-  P_COLORS[1].name=vsCPU?'คอม':'ผู้เล่น 2';
-  $('p2name').textContent=vsCPU?`คอม (${AI_NAMES[aiLevel]})`:'ผู้เล่น 2';
+  P_COLORS[0].name=watch?'คอม 1':'ผู้เล่น 1';
+  P_COLORS[1].name=watch?'คอม 2':vsCPU?'คอม':'ผู้เล่น 2';
+  $('p1name').textContent=watch?`คอม 1 (${AI_NAMES[aiLevel]})`:'ผู้เล่น 1';
+  $('p2name').textContent=vsCPU?`${P_COLORS[1].name} (${AI_NAMES[aiLevel]})`:'ผู้เล่น 2';
   $('p2keys').textContent=vsCPU?'คอมพิวเตอร์ควบคุม':'';
   if(!vsCPU)$('p2keys').innerHTML='ปุ่มลูกศร <kbd>↑</kbd><kbd>←</kbd><kbd>↓</kbd><kbd>→</kbd>';
-  $('p1keys').innerHTML=vsCPU?'ปุ่ม <kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> หรือลูกศร':'ปุ่ม <kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd>';
+  if(watch)$('p1keys').textContent='คอมพิวเตอร์ควบคุม';else $('p1keys').innerHTML=vsCPU?'ปุ่ม <kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> หรือลูกศร':'ปุ่ม <kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd>';
   document.querySelector('.pad.p2').style.visibility=vsCPU?'hidden':'';
+  document.querySelector('.pad.p1').style.visibility=watch?'hidden':'';
   menu.hidden=true;hud.hidden=false;field.hidden=false;touch.hidden=false;
   $('stName').textContent=stage.name;
   resize();startRound();
@@ -365,6 +372,7 @@ function startMatch(){
 function startRound(){
   snakes=[makeSnake(0,6,4,'right'),makeSnake(1,25,15,'left')];
   snakes[1].ai=vsCPU?aiLevel:null;
+  snakes[0].ai=watch?aiLevel:null;
   items=[];particles=[];floats=[];roundResult=null;gameTime=0;tickN=0;acc=0;
   spawn('apple');spawn('apple');
   nextCherry=rand(3000,6000);nextBanana=rand(5000,9000);
@@ -398,6 +406,7 @@ function queueDir(p,d){
 function wrapPos(x,y){return stage.wrap?{x:(x+W)%W,y:(y+H)%H}:{x,y}}
 function tick(){
   tickN++;
+  checkStuckDeaths();if(state!=='playing')return;
   const movers=snakes.filter(s=>s.alive&&(s.slowUntil>gameTime?tickN%2===0:true));
   if(!movers.length)return;
   for(const s of movers)if(s.ai)aiThink(s);
@@ -406,33 +415,27 @@ function tick(){
     if(s.queue.length){const d=s.queue.shift();if(d!==OPP[s.dir])s.dir=d}
     const h=s.body[0];nh.set(s,wrapPos(h.x+DIRS[s.dir][0],h.y+DIRS[s.dir][1]));
   }
-  // collisions
-  for(const s of movers){
-    const h=nh.get(s);
-    if(h.x<0||h.y<0||h.x>=W||h.y>=H||stage.obs.has(K(h.x,h.y))){s.dead='wall';continue}
-    for(const o of snakes){
-      const moving=nh.has(o)&&o.grow===0;
-      const cells=moving?o.body.slice(0,-1):o.body;
-      if(cells.some(b=>b.x===h.x&&b.y===h.y)){s.dead=o===s?'self':'other';break}
-    }
-  }
-  if(movers.length===2){
-    const [a,b]=movers,ha=nh.get(a),hb=nh.get(b);
-    const same=ha.x===hb.x&&ha.y===hb.y;
-    const swap=ha.x===b.body[0].x&&ha.y===b.body[0].y&&hb.x===a.body[0].x&&hb.y===a.body[0].y;
-    if(same||swap){a.dead=b.dead='headon'}
-  }
-  const dead=movers.filter(s=>s.dead);
-  if(dead.length){
-    dead.forEach(s=>{s.alive=false;burst(s.body[0].x,s.body[0].y,P_COLORS[s.p].main,26)});
-    shake=10;SFX.crash();endRound(dead);return;
+  // collisions: a blocked snake does not die, it gets stuck; stuck for STUCK_MS in a row = out
+  const moving=new Set(movers),why=new Map();
+  for(let pass=0;pass<4;pass++){
+    let changed=false;
+    for(const s of [...moving]){const r=blockedBy(s,nh.get(s),moving);if(r){moving.delete(s);why.set(s,r);changed=true}}
+    if(moving.size===2){const [a,b]=[...moving],ha=nh.get(a),hb=nh.get(b);
+      const same=ha.x===hb.x&&ha.y===hb.y,swap=ha.x===b.body[0].x&&ha.y===b.body[0].y&&hb.x===a.body[0].x&&hb.y===a.body[0].y;
+      if(same||swap){moving.clear();why.set(a,'headon');why.set(b,'headon');changed=true}}
+    if(!changed)break;
   }
   for(const s of movers){
+    if(moving.has(s)){s.stuckSince=-1;continue}
+    s.stuckWhy=why.get(s);
+    if(s.stuckSince<0){s.stuckSince=gameTime;SFX.bump();shake=Math.max(shake,4);float(s.body[0].x,s.body[0].y,'ติด!','#ff4b3e')}
+  }
+  for(const s of moving){
     s.body.unshift(nh.get(s));
     if(s.grow>0)s.grow--;else s.body.pop();
   }
   // pickups
-  for(const s of movers){
+  for(const s of moving){
     const h=s.body[0];const i=items.findIndex(it=>it.x===h.x&&it.y===h.y);if(i<0)continue;
     const it=items.splice(i,1)[0];const o=snakes[1-s.p];
     if(it.type==='apple'){s.grow+=3;SFX.apple();float(h.x,h.y,'+3',P_COLORS[s.p].main);burst(h.x,h.y,'#e8352c',10);spawn('apple')}
@@ -448,15 +451,33 @@ function tick(){
   }
   updateHud();
 }
+function checkStuckDeaths(){
+  const dead=snakes.filter(s=>s.alive&&s.stuckSince>=0&&gameTime-s.stuckSince>=STUCK_MS);
+  if(!dead.length)return;
+  dead.forEach(s=>{s.alive=false;s.dead=s.stuckWhy||'wall';burst(s.body[0].x,s.body[0].y,P_COLORS[s.p].main,26)});
+  shake=10;SFX.crash();endRound(dead);
+}
+function blockedBy(s,h,moving){
+  if(h.x<0||h.y<0||h.x>=W||h.y>=H||stage.obs.has(K(h.x,h.y)))return 'wall';
+  for(const o of snakes){const mv=moving.has(o)&&o.grow===0;const cells=mv?o.body.slice(0,-1):o.body;
+    if(cells.some(b=>b.x===h.x&&b.y===h.y))return o===s?'self':'other'}
+  return null;
+}
 // ---------- computer player ----------
 // Scores each of the 3 possible turns: never step into a crash, avoid pockets smaller than its body,
 // head for the best fruit (cherry/banana count extra), and on hard, keep away from the rival's next move.
 const AI_CFG={
-  easy:  {mistake:.07,flood:false,headRisk:false,bonus:{apple:0,cherry:2,banana:2},lazy:.35},
-  medium:{mistake:.015,flood:true,room:4,headRisk:false,bonus:{apple:0,cherry:5,banana:5},lazy:0},
-  hard:  {mistake:0,flood:true,room:10,headRisk:true,bonus:{apple:0,cherry:9,banana:8},lazy:0},
+  easy:  {mistake:.07,flood:false,headRisk:false,trap:0,bonus:{apple:0,cherry:2,banana:2},lazy:.35},
+  medium:{mistake:.015,flood:true,room:4,headRisk:false,trap:4,bonus:{apple:0,cherry:5,banana:5},lazy:0},
+  hard:  {mistake:0,flood:true,room:10,headRisk:true,trap:10,bonus:{apple:0,cherry:9,banana:8},lazy:0},
 };
 function stepCell(x,y,d){const n=wrapPos(x+DIRS[d][0],y+DIRS[d][1]);return(n.x<0||n.y<0||n.x>=W||n.y>=H)?null:n}
+function reach(start,blocked,cap){
+  const seen=new Set([K(start.x,start.y)]),q=[start];
+  for(let i=0;i<q.length&&q.length<=cap;i++){const c=q[i];
+    for(const d in DIRS){const m=stepCell(c.x,c.y,d);if(!m)continue;const k=K(m.x,m.y);if(seen.has(k)||blocked.has(k))continue;seen.add(k);q.push(m)}}
+  return Math.min(cap,q.length-1);
+}
 function aiThink(s){
   const cfg=AI_CFG[s.ai],o=snakes[1-s.p],h=s.body[0];
   const blocked=new Set(stage.obs);
@@ -485,6 +506,10 @@ function aiThink(s){
       if(cfg.room)score+=Math.min(space,(s.body.length+s.grow)*3)*cfg.room; // prefer open areas over tight pockets
       if(cfg.headRisk&&rivalNext.has(K(n.x,n.y)))score-=2e4;
       score-=(target===Infinity?40:target)*10;
+      if(cfg.trap&&o.alive){ // squeeze the rival: fewer cells it can reach after this move = better
+        blocked.add(K(n.x,n.y));const rs=reach(o.body[0],blocked,80);blocked.delete(K(n.x,n.y));
+        score+=(80-rs)*cfg.trap;
+      }
       if(d===s.dir)score+=1; // prefer straight lines when tied
       score+=Math.random();
     }
@@ -498,7 +523,7 @@ function updateItems(){
   if(!items.some(i=>i.type==='cherry')&&gameTime>=nextCherry){spawn('cherry');nextCherry=Infinity}
   if(!items.some(i=>i.type==='banana')&&gameTime>=nextBanana){spawn('banana');nextBanana=Infinity}
 }
-const REASON={wall:()=>'ชน'+stage.wall,self:()=>'ชนตัวเอง',other:()=>'ชนตัวอีกฝ่าย',headon:()=>'หัวชนหัว'};
+const REASON={wall:()=>'ติด'+stage.wall,self:()=>'ติดตัวเอง',other:()=>'ถูกล้อมปิดทาง',headon:()=>'หัวชนหัว'};
 function endRound(dead){
   state='roundover';
   let winner=null;
@@ -512,7 +537,7 @@ function endRound(dead){
       <div class="btns"><button class="btn" data-a="again">เล่นอีกครั้ง</button><button class="btn sec" data-a="menu">เปลี่ยนฉาก</button></div><p style="font-size:13px">กด Enter เพื่อเล่นอีกครั้ง</p>`);
     }else{
       const head=winner==null?'เสมอ!':`${P_COLORS[winner].name} ได้แต้ม`;
-      const why=dead.map(s=>`${P_COLORS[s.p].name} ${REASON[s.dead]()}`).join(' และ ');
+      const why=dead.map(s=>`${P_COLORS[s.p].name} ${REASON[s.dead]()} ค้างนาน 3 วินาที`).join(' และ ');
       showOv(`<h2 style="color:${winner==null?'var(--fg)':P_COLORS[winner].main}">${head}</h2><p>${why}</p><p>สกอร์ ${scores[0]} : ${scores[1]}</p>
       <div class="btns"><button class="btn" data-a="next">รอบต่อไป</button><button class="btn sec" data-a="menu">เมนู</button></div><p style="font-size:13px">กด Enter เพื่อไปต่อ</p>`);
     }
@@ -539,8 +564,10 @@ function updateHud(){
 }
 function updateSlowChips(){
   for(let p=0;p<2;p++){const s=snakes[p],chip=$('slow'+(p+1));
-    const left=s?s.slowUntil-gameTime:0;
-    if(left>0&&s.alive){chip.hidden=false;chip.textContent='ช้าลง '+(left/1000).toFixed(1)+' วิ'}else chip.hidden=true}
+    const left=s?s.slowUntil-gameTime:0,stuck=s&&s.alive&&s.stuckSince>=0;
+    chip.classList.toggle('stuck',!!stuck);
+    if(stuck){chip.hidden=false;chip.textContent='ติด! เหลือ '+Math.max(0,(STUCK_MS-(gameTime-s.stuckSince))/1000).toFixed(1)+' วิ'}
+    else if(left>0&&s.alive){chip.hidden=false;chip.textContent='ช้าลง '+(left/1000).toFixed(1)+' วิ'}else chip.hidden=true}
 }
 
 // ---------- effects ----------
@@ -581,6 +608,14 @@ function drawSnake(s,t){
   if(!s.alive){c.strokeStyle='#111';c.lineWidth=sz*.06;c.beginPath();
     for(const sgn of[-1,1]){const ex=cx+dx*sz*.14+px*sgn*sz*.2,ey=cy+dy*sz*.14+py*sgn*sz*.2;c.moveTo(ex-sz*.08,ey-sz*.08);c.lineTo(ex+sz*.08,ey+sz*.08);c.moveTo(ex+sz*.08,ey-sz*.08);c.lineTo(ex-sz*.08,ey+sz*.08)}c.stroke()}
   c.restore();
+  if(s.alive&&s.stuckSince>=0){ // stuck: red pulse and countdown over the head
+    const left=Math.max(0,(STUCK_MS-(gameTime-s.stuckSince))/1000);
+    c.save();c.strokeStyle='#ff4b3e';c.lineWidth=sz*.12;c.globalAlpha=.5+.5*Math.sin(t/80);
+    c.beginPath();c.arc(cx,cy,sz*.62,0,Math.PI*2);c.stroke();c.globalAlpha=1;
+    c.font=`600 ${Math.round(sz*.8)}px Mitr, sans-serif`;c.textAlign='center';c.textBaseline='middle';
+    c.lineWidth=sz*.18;c.strokeStyle='rgba(0,0,0,.7)';c.strokeText(left.toFixed(1),cx,cy-sz*1.1);c.fillStyle='#ff4b3e';c.fillText(left.toFixed(1),cx,cy-sz*1.1);
+    c.restore();
+  }
   if(slowed){ // banana daze: spinning stars over the head
     c.save();c.fillStyle='#ffd23f';
     for(let i=0;i<3;i++){const a=t/300+i*2.094;c.beginPath();c.arc(cx+Math.cos(a)*sz*.55,cy-sz*.55+Math.sin(a)*sz*.18,sz*.09,0,Math.PI*2);c.fill()}
@@ -647,7 +682,7 @@ const KEYMAP={KeyW:[0,'up'],KeyA:[0,'left'],KeyS:[0,'down'],KeyD:[0,'right'],Arr
 window.addEventListener('keydown',e=>{
   if(e.target.closest&&e.target.closest('button')&&(e.code==='Enter'||e.code==='Space')&&state==='menu')return; // let focused menu buttons work
   const m=KEYMAP[e.code];
-  if(m){if(state!=='menu')e.preventDefault();queueDir(vsCPU?0:m[0],m[1]);return}
+  if(m){if(state!=='menu')e.preventDefault();if(!watch)queueDir(vsCPU?0:m[0],m[1]);return}
   if(e.code==='Enter'||e.code==='NumpadEnter'){
     e.preventDefault();
     if(state==='menu')startMatch();else if(state==='roundover'&&!ov.hidden)nextRound();else if(state==='matchover')startMatch();else if(state==='paused')togglePause();
@@ -658,7 +693,7 @@ window.addEventListener('keydown',e=>{
   }
 });
 document.querySelectorAll('.pad').forEach(pad=>pad.addEventListener('pointerdown',e=>{
-  const b=e.target.closest('button');if(!b)return;e.preventDefault();queueDir(+pad.dataset.p,b.dataset.d)}));
+  const b=e.target.closest('button');if(!b)return;e.preventDefault();if(!watch)queueDir(+pad.dataset.p,b.dataset.d)}));
 document.addEventListener('visibilitychange',()=>{if(document.hidden&&state==='playing')togglePause()});
 
 setMuteLabel();renderMenu();requestAnimationFrame(frame);
