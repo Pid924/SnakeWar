@@ -95,6 +95,8 @@ canvas#game{display:block;border-radius:10px;box-shadow:0 0 0 2px var(--line),0 
 .pad{display:grid;grid-template-columns:repeat(3,52px);grid-template-rows:repeat(3,52px);gap:4px}
 .pad button{border-radius:12px;border:1px solid var(--line);background:var(--panel2);font-size:20px;touch-action:none;user-select:none;-webkit-user-select:none}
 .pad.p1 button{color:var(--p1)} .pad.p2 button{color:var(--p2)}
+.pad .bn{grid-column:3;grid-row:3;font-size:16px;color:var(--gold)!important}
+.chip.ban{background:#3a3150;color:var(--gold)}
 .pad .u{grid-column:2;grid-row:1}.pad .l{grid-column:1;grid-row:2}.pad .r{grid-column:3;grid-row:2}.pad .dn{grid-column:2;grid-row:3}
 .help{color:var(--muted);font-size:13px;text-align:center}
 
@@ -121,7 +123,7 @@ canvas#game{display:block;border-radius:10px;box-shadow:0 0 0 2px var(--line),0 
     <div class="pl p1">
       <div class="nm"><span id="p1name">ผู้เล่น 1</span> <span class="chip" id="slow1" hidden>ช้าลง</span></div>
       <div class="keys" id="p1keys">ปุ่ม <kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd></div>
-      <div class="row"><span class="pips" id="pips1"></span><span class="len" id="len1">ยาว 4</span></div>
+      <div class="row"><span class="pips" id="pips1"></span><span class="len" id="len1">ยาว 4</span><span class="chip ban" id="ban1" hidden></span></div>
     </div>
     <div class="mid">
       <div class="st" id="stName">ทุ่งหญ้าโล่ง</div>
@@ -130,7 +132,7 @@ canvas#game{display:block;border-radius:10px;box-shadow:0 0 0 2px var(--line),0 
     <div class="pl p2">
       <div class="nm"><span class="chip" id="slow2" hidden>ช้าลง</span> <span id="p2name">ผู้เล่น 2</span></div>
       <div class="keys" id="p2keys">ปุ่มลูกศร <kbd>↑</kbd><kbd>←</kbd><kbd>↓</kbd><kbd>→</kbd></div>
-      <div class="row"><span class="len" id="len2">ยาว 4</span><span class="pips" id="pips2"></span></div>
+      <div class="row"><span class="chip ban" id="ban2" hidden></span><span class="len" id="len2">ยาว 4</span><span class="pips" id="pips2"></span></div>
     </div>
   </div>
 
@@ -161,7 +163,7 @@ canvas#game{display:block;border-radius:10px;box-shadow:0 0 0 2px var(--line),0 
     </div>
     <div class="start">
       <button class="btn" id="startBtn">เริ่มเกม</button>
-      <span class="help">หรือกด <kbd>Enter</kbd> · ระหว่างเล่นกด <kbd>Space</kbd> เพื่อหยุดพัก</span>
+      <span class="help">หรือกด <kbd>Enter</kbd> · ระหว่างเล่น <kbd>Space</kbd> หยุดพัก · ใช้กล้วย: ผู้เล่น 1 <kbd>E</kbd> ผู้เล่น 2 <kbd>Enter</kbd></span>
     </div>
   </section>
 
@@ -173,19 +175,19 @@ canvas#game{display:block;border-radius:10px;box-shadow:0 0 0 2px var(--line),0 
   <div class="touch" id="touch" hidden>
     <div class="pad p1" data-p="0">
       <button class="u" data-d="up" aria-label="ผู้เล่น 1 ขึ้น">▲</button><button class="l" data-d="left" aria-label="ผู้เล่น 1 ซ้าย">◀</button>
-      <button class="r" data-d="right" aria-label="ผู้เล่น 1 ขวา">▶</button><button class="dn" data-d="down" aria-label="ผู้เล่น 1 ลง">▼</button>
+      <button class="r" data-d="right" aria-label="ผู้เล่น 1 ขวา">▶</button><button class="dn" data-d="down" aria-label="ผู้เล่น 1 ลง">▼</button><button class="bn" data-d="banana" aria-label="ผู้เล่น 1 ใช้กล้วย">กล้วย</button>
     </div>
     <div class="pad p2" data-p="1">
       <button class="u" data-d="up" aria-label="ผู้เล่น 2 ขึ้น">▲</button><button class="l" data-d="left" aria-label="ผู้เล่น 2 ซ้าย">◀</button>
-      <button class="r" data-d="right" aria-label="ผู้เล่น 2 ขวา">▶</button><button class="dn" data-d="down" aria-label="ผู้เล่น 2 ลง">▼</button>
+      <button class="r" data-d="right" aria-label="ผู้เล่น 2 ขวา">▶</button><button class="dn" data-d="down" aria-label="ผู้เล่น 2 ลง">▼</button><button class="bn" data-d="banana" aria-label="ผู้เล่น 2 ใช้กล้วย">กล้วย</button>
     </div>
   </div>
 
   <div class="legend">
     <div class="li"><canvas data-item="apple" width="40" height="40" style="width:40px;height:40px"></canvas><div><b>แอปเปิ้ล</b><span>ตัวเรายาวขึ้น 3 ช่อง</span></div></div>
     <div class="li"><canvas data-item="cherry" width="40" height="40" style="width:40px;height:40px"></canvas><div><b>เชอร์รี่</b><span>ศัตรูหดสั้นลง 3 ช่อง (โผล่เป็นพักๆ)</span></div></div>
-    <div class="li"><canvas data-item="banana" width="40" height="40" style="width:40px;height:40px"></canvas><div><b>กล้วย</b><span>ศัตรูช้าลงครึ่งหนึ่ง 5 วินาที (โผล่เป็นพักๆ)</span></div></div>
-    <div class="li"><div><b>กติกา</b><span>ชนแล้วยังไม่ตาย งูจะติดค้าง ถ้าหาทางออกไม่ได้ภายใน 3 วินาทีถึงแพ้ ดังนั้นต้องล้อมปิดทางศัตรู ถ้าติดตายพร้อมกันนับเสมอ</span></div></div>
+    <div class="li"><canvas data-item="banana" width="40" height="40" style="width:40px;height:40px"></canvas><div><b>กล้วย</b><span>เก็บไว้ได้ 1 ลูก กด E (ผู้เล่น 2 กด Enter) ให้ศัตรูช้าลง 5 วินาที ถ้าเก็บลูกที่สองตอนยังถืออยู่ ศัตรูช้าทันที</span></div></div>
+    <div class="li"><div><b>กติกา</b><span>ชนแล้วงูจะติดค้าง หาทางออกไม่ได้ใน 3 วินาทีถึงแพ้ ถ้าใช้ตัวเองล้อมศัตรูได้จนหัวกลับมาชนตัวเอง ศัตรูที่อยู่ข้างในแพ้ทันที</span></div></div>
   </div>
 </div>
 
@@ -352,7 +354,7 @@ let nextCherry=0,nextBanana=0,particles=[],floats=[],roundResult=null,shake=0;
 const rand=(a,b)=>a+Math.random()*(b-a);
 
 function makeSnake(p,x,y,dir){const dx=-DIRS[dir][0];const body=[];for(let i=0;i<4;i++)body.push({x:x+dx*i,y});
-  return {p,body,dir,queue:[],grow:0,alive:true,slowUntil:0,dead:null,stuckSince:-1,stuckWhy:null}}
+  return {p,body,dir,queue:[],grow:0,alive:true,slowUntil:0,dead:null,stuckSince:-1,stuckWhy:null,banana:0,bananaAt:0}}
 
 function startMatch(){
   stage=STAGES[stageIdx];scores=[0,0];round=1;
@@ -410,6 +412,10 @@ function tick(){
   const movers=snakes.filter(s=>s.alive&&(s.slowUntil>gameTime?tickN%2===0:true));
   if(!movers.length)return;
   for(const s of movers)if(s.ai)aiThink(s);
+  for(const s of snakes)if(s.ai&&s.alive&&s.banana>0){ // computer fires its banana when the rival is close or after a short wait
+    const o=snakes[1-s.p],d=Math.abs(o.body[0].x-s.body[0].x)+Math.abs(o.body[0].y-s.body[0].y);
+    if(d<=8||gameTime-s.bananaAt>(s.ai==='easy'?2000:6000))useBanana(s.p);
+  }
   const nh=new Map();
   for(const s of movers){
     if(s.queue.length){const d=s.queue.shift();if(d!==OPP[s.dir])s.dir=d}
@@ -445,11 +451,40 @@ function tick(){
       float(h.x,h.y,'เชอร์รี่!','#ff6b8e');float(o.body[0].x,o.body[0].y,n?'หด -'+n:'สั้นสุดแล้ว',P_COLORS[o.p].main);
       nextCherry=gameTime+rand(4000,8000);
     }else if(it.type==='banana'){
-      o.slowUntil=gameTime+5000;SFX.banana();float(h.x,h.y,'กล้วย!','#ffd23f');float(o.body[0].x,o.body[0].y,'ช้าลง!','#ffd23f');
+      if(s.banana>0){slowRival(s);float(h.x,h.y,'กล้วยลูกที่ 2!','#ffd23f')} // already holding one: second one fires at once
+      else{s.banana=1;s.bananaAt=gameTime;SFX.apple();float(h.x,h.y,'เก็บกล้วย!','#ffd23f')}
       nextBanana=gameTime+rand(6000,10000);
     }
   }
+  checkEnclosed();
   updateHud();
+}
+function slowRival(s){
+  const o=snakes[1-s.p];if(!o.alive)return;
+  o.slowUntil=gameTime+5000;SFX.banana();float(o.body[0].x,o.body[0].y,'ช้าลง!','#ffd23f');
+}
+function useBanana(p){
+  const s=snakes[p];if(state!=='playing'||!s||!s.alive||s.banana<1)return;
+  s.banana=0;slowRival(s);float(s.body[0].x,s.body[0].y,'ปากล้วย!','#ffd23f');updateHud();
+}
+// A snake whose body closes a loop around the rival's head wins at once.
+function enclosedBy(S,O){
+  const wall=new Set(S.body.map(b=>K(b.x,b.y)));const h=O.body[0];
+  if(wall.has(K(h.x,h.y)))return false;
+  const seen=new Set([K(h.x,h.y)]),q=[h];
+  for(let i=0;i<q.length;i++){const c=q[i];
+    if(!stage.wrap&&(c.x===0||c.y===0||c.x===W-1||c.y===H-1))return false; // reached the open edge: not enclosed
+    for(const d in DIRS){let x=c.x+DIRS[d][0],y=c.y+DIRS[d][1];
+      if(stage.wrap){x=(x+W)%W;y=(y+H)%H}else if(x<0||y<0||x>=W||y>=H)continue;
+      const k=K(x,y);if(seen.has(k)||wall.has(k))continue;seen.add(k);q.push({x,y})}}
+  return q.length<=(W*H-S.body.length)/2;
+}
+function checkEnclosed(){
+  if(state!=='playing')return;
+  const dead=snakes.filter(O=>O.alive&&snakes[1-O.p].alive&&enclosedBy(snakes[1-O.p],O));
+  if(!dead.length)return;
+  dead.forEach(s=>{s.alive=false;s.dead='enclosed';burst(s.body[0].x,s.body[0].y,P_COLORS[s.p].main,30)});
+  shake=12;SFX.crash();endRound(dead);
 }
 function checkStuckDeaths(){
   const dead=snakes.filter(s=>s.alive&&s.stuckSince>=0&&gameTime-s.stuckSince>=STUCK_MS);
@@ -523,7 +558,7 @@ function updateItems(){
   if(!items.some(i=>i.type==='cherry')&&gameTime>=nextCherry){spawn('cherry');nextCherry=Infinity}
   if(!items.some(i=>i.type==='banana')&&gameTime>=nextBanana){spawn('banana');nextBanana=Infinity}
 }
-const REASON={wall:()=>'ติด'+stage.wall,self:()=>'ติดตัวเอง',other:()=>'ถูกล้อมปิดทาง',headon:()=>'หัวชนหัว'};
+const REASON={wall:()=>'ติด'+stage.wall+' ค้างนาน 3 วินาที',self:()=>'ติดตัวเอง ค้างนาน 3 วินาที',other:()=>'ถูกล้อมปิดทาง ค้างนาน 3 วินาที',headon:()=>'หัวชนหัว ค้างนาน 3 วินาที',enclosed:()=>'ถูกขดล้อมจนมิด'};
 function endRound(dead){
   state='roundover';
   let winner=null;
@@ -537,7 +572,7 @@ function endRound(dead){
       <div class="btns"><button class="btn" data-a="again">เล่นอีกครั้ง</button><button class="btn sec" data-a="menu">เปลี่ยนฉาก</button></div><p style="font-size:13px">กด Enter เพื่อเล่นอีกครั้ง</p>`);
     }else{
       const head=winner==null?'เสมอ!':`${P_COLORS[winner].name} ได้แต้ม`;
-      const why=dead.map(s=>`${P_COLORS[s.p].name} ${REASON[s.dead]()} ค้างนาน 3 วินาที`).join(' และ ');
+      const why=dead.map(s=>`${P_COLORS[s.p].name} ${REASON[s.dead]()}`).join(' และ ');
       showOv(`<h2 style="color:${winner==null?'var(--fg)':P_COLORS[winner].main}">${head}</h2><p>${why}</p><p>สกอร์ ${scores[0]} : ${scores[1]}</p>
       <div class="btns"><button class="btn" data-a="next">รอบต่อไป</button><button class="btn sec" data-a="menu">เมนู</button></div><p style="font-size:13px">กด Enter เพื่อไปต่อ</p>`);
     }
@@ -567,7 +602,9 @@ function updateSlowChips(){
     const left=s?s.slowUntil-gameTime:0,stuck=s&&s.alive&&s.stuckSince>=0;
     chip.classList.toggle('stuck',!!stuck);
     if(stuck){chip.hidden=false;chip.textContent='ติด! เหลือ '+Math.max(0,(STUCK_MS-(gameTime-s.stuckSince))/1000).toFixed(1)+' วิ'}
-    else if(left>0&&s.alive){chip.hidden=false;chip.textContent='ช้าลง '+(left/1000).toFixed(1)+' วิ'}else chip.hidden=true}
+    else if(left>0&&s.alive){chip.hidden=false;chip.textContent='ช้าลง '+(left/1000).toFixed(1)+' วิ'}else chip.hidden=true;
+    const ban=$('ban'+(p+1)),has=s&&s.alive&&s.banana>0;ban.hidden=!has;
+    if(has)ban.textContent=s.ai?'ถือกล้วย':(p===0?'กล้วยพร้อม กด E':(vsCPU?'':'กล้วยพร้อม กด Enter'))}
 }
 
 // ---------- effects ----------
@@ -683,6 +720,10 @@ window.addEventListener('keydown',e=>{
   if(e.target.closest&&e.target.closest('button')&&(e.code==='Enter'||e.code==='Space')&&state==='menu')return; // let focused menu buttons work
   const m=KEYMAP[e.code];
   if(m){if(state!=='menu')e.preventDefault();if(!watch)queueDir(vsCPU?0:m[0],m[1]);return}
+  if(state==='playing'&&!watch){
+    if(e.code==='KeyE'||e.code==='KeyQ'){e.preventDefault();useBanana(0);return}
+    if(['Enter','NumpadEnter','ShiftRight','Slash'].includes(e.code)){e.preventDefault();useBanana(vsCPU?0:1);return}
+  }
   if(e.code==='Enter'||e.code==='NumpadEnter'){
     e.preventDefault();
     if(state==='menu')startMatch();else if(state==='roundover'&&!ov.hidden)nextRound();else if(state==='matchover')startMatch();else if(state==='paused')togglePause();
@@ -693,7 +734,7 @@ window.addEventListener('keydown',e=>{
   }
 });
 document.querySelectorAll('.pad').forEach(pad=>pad.addEventListener('pointerdown',e=>{
-  const b=e.target.closest('button');if(!b)return;e.preventDefault();if(!watch)queueDir(+pad.dataset.p,b.dataset.d)}));
+  const b=e.target.closest('button');if(!b)return;e.preventDefault();if(watch)return;if(b.dataset.d==='banana')useBanana(+pad.dataset.p);else queueDir(+pad.dataset.p,b.dataset.d)}));
 document.addEventListener('visibilitychange',()=>{if(document.hidden&&state==='playing')togglePause()});
 
 setMuteLabel();renderMenu();requestAnimationFrame(frame);
